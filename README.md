@@ -12,14 +12,13 @@ The project is made with [Customtkinter](https://github.com/TomSchimansky/Custom
 ---
 Steps to run
 ---
-Run the [Package_installer.bat](Package_installer.bat) to install all the packages needed.
-
-Check out the dataset on [Kaggle](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia)
-
 [Model.ipynb](Model.ipynb) can be executed on 
 [Google Colab](https://colab.research.google.com) as well as Jupyter notebook, but Colab is recommended with GPU run time.
 
+Run the [Package_installer.bat](Package_installer.bat) to install all the packages needed.
+Unzip the saved_model.zip and then run [Interface.py](Interface.py).
 
+Check out the dataset on [Kaggle](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia)
 
 ---
 **Feel free to point out issue or improvements with the code**
