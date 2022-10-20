@@ -1,4 +1,4 @@
-# Pneumonia_Detection_system
+# Pneumonia Detection system
 
 
 Introduction
