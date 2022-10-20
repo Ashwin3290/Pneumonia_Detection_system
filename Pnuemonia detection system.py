@@ -1,17 +1,143 @@
 from datetime import datetime
 from tkinter import *
 from PIL import ImageTk,Image
-from backend import *
 import customtkinter as ck
 from tkinter import filedialog as fd        
+import base64
+import mysql.connector as myc
+from datetime import datetime, timezone
+import io
+import numpy as np
+from threading import Thread
+import silence_tensorflow.auto
+import time
+
+conn=myc.connect(host='localhost',user='root',password='12345',database='pnuemonia')
+cursor=conn.cursor()
+model=0
+def make_model():
+    global model
+    from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
+    from tensorflow.keras.models import Sequential
+    from keras import regularizers
+    from tensorflow.keras.applications import ResNet50V2
+
+    base_model =ResNet50V2(weights='imagenet', input_shape=(224,224,3), include_top=False)
+    model=Sequential([
+        base_model,
+        GlobalAveragePooling2D(),
+        Dense(512, activation = 'relu',kernel_regularizer=regularizers.l2(0.001)),
+        Dropout(0.5),
+        Dense(128, activation = 'relu',kernel_regularizer=regularizers.l2(0.001)),
+        Dropout(0.3),
+        Dense(64, activation = 'relu',kernel_regularizer=regularizers.l2(0.001)),
+        Dropout(0.2),
+        Dense(1, activation='sigmoid')
+    ])
+    model.load_weights("saved_model/tuned_model")
+    
+Thread(target=make_model,name="model_maker").start()
+
+def connect():
+    global cursor,conn
+    conn=myc.connect(host='localhost',user='root',password='12345',database='pnuemonia')
+    cursor=conn.cursor()
+
+def verify(token):
+    connect()
+    q="Select token_num from patient where token_num ="+str(token)
+    cursor.execute(q)
+    data=cursor.fetchall()
+    conn.close()
+    if not data:
+        return True
+    else:
+        False
+
+def display(data):
+    connect()
+    n=[]
+    for row in data:
+        d=[]
+        for i in row:
+            d.append(i)
+        n.append(d)
+    conn.close()
+    if len(n)==1:
+        return d
+    else:
+        return n
+
+
+def add(name,token,date,loc,pred):
+    q="Insert into patient values(%s,%s,%s,%s,%s);"
+    blob=img_to_bin(loc)
+    values=(name,str(token),str(date),blob,pred)
+    connect()
+    cursor.execute(q,values)
+    conn.commit()
+    conn.close()
+
+def searchindata(name='',token=0):
+    q="select * from patient where name=%s or token_num=%s"
+    values=(name,str(token))
+    connect()
+    cursor.execute(q,values)    
+    data=display(cursor.fetchall())
+    if isinstance(data[0],list):
+        for i in range(len(data)):
+            data[i][3]=bin_to_img(data[i][3])
+        return data,"multiple"
+    else:
+            data[3]=bin_to_img(data[3])
+            return data,"single"
+
+    
+def predict(loc):
+    while str(type(model))!="<class 'keras.engine.sequential.Sequential'>":
+        print("waiting for model to load")
+        time.sleep(1)
+    else:
+        img = Image.open(loc).resize((224,224))
+        mode=img.mode
+        if mode!="RGB":
+            img=img.convert("RGB")
+        x = np.asarray(img)
+        x = np.expand_dims(x, axis=0)
+
+        classes = model.predict(x, batch_size=5)
+        print(classes[0])
+        if classes[0]>0.5:
+            return "Normal"
+        else:
+            return "Pnuemonia"
+    
+
+
+def img_to_bin(loc):
+    try:
+        with open(loc,"rb") as file:
+            binary=file.read()
+            binary=base64.b64encode(binary)
+        return binary
+    except:
+        print("problem with image")
+
+def bin_to_img(binary):
+    try:
+        binary= base64.b64decode(binary)
+        image = io.BytesIO(binary)
+        return image
+    except:
+        print("Failed to create image")
+
 
 ck.set_appearance_mode("dark") 
 ck.set_default_color_theme("blue")
 loc=""
 bg_img="images/bg-dark.ppm"
 options="Light"
-light=Image.open("images/light slide.png")
-dark=Image.open("images/dark slide.png")
+
 def pdfsave(frame,loc,name,date,token,pred):
     from fpdf import FPDF
     pdf = FPDF()
@@ -175,9 +301,15 @@ class prediction():
             token=random.randint(0,99999)
         date=datetime.now().strftime("%Y-%m-%d")
         img=Image.open(loc)
-        pred=predict(loc)
-        add(username,token,date,loc,pred)
-        output(self.frame,img,username,date,token,pred,"welcome")
+        try:
+            pred=predict(loc)
+            add(username,token,date,loc,pred)
+            output(self.frame,img,username,date,token,pred,"welcome")
+        except:
+            error_label=ck.CTkLabel(master=self.frame,text="Error Occured",text_color="red",text_font=("",15))
+            error_label.place(relx=.5,rely=.5,anchor=CENTER,x=-50,y=200)
+            root.mainloop()
+
         
     def back(self):
         self.frame.destroy()
